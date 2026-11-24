@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <g transform="translate(38, 34) scale(3.63)">
+    <!-- Circular Emblem Ring -->
+    <circle cx="60" cy="58" r="46" fill="#FAF6EE" stroke="#0E6E73" stroke-width="3.5" />
+    <circle cx="60" cy="58" r="41.5" fill="none" stroke="#B88E3E" stroke-width="1.2" stroke-opacity="0.7" />
+
+    <!-- Golden Calligraphic Emblem Arc -->
+    <g transform="translate(0, -3)">
+      <path
+        d="M36 46 C42 26, 72 22, 83 39 C89 49, 80 60, 65 60 C52 60, 46 51, 52 41 C56 35, 67 34, 72 42"
+        fill="none"
+        stroke="#B88E3E"
+        stroke-width="4.2"
+        stroke-linecap="round"
+      />
+      <circle cx="62" cy="28" r="2.5" fill="#B88E3E" />
+      <circle cx="71" cy="26" r="2.1" fill="#B88E3E" />
+    </g>
+
+    <text
+      x="60"
+      y="62"
+      text-anchor="middle"
+      fill="#0F332B"
+      font-family="Noto Sans Arabic, Cairo, sans-serif"
+      font-weight="800"
+      font-size="18.5"
+    >الفرات</text>
+
+    <!-- Swooping Teal Ribbon -->
+    <path d="M19 71 Q60 94 101 63 L95 77 Q60 106 25 84 Z" fill="#0E6E73" />
+    <!-- Golden Under-Swoosh -->
+    <path d="M13 88 Q52 109 94 78 Q54 99 18 82 Z" fill="#B88E3E" />
+
+    <!-- Ribbon Subtitle -->
+    <text
+      x="60"
+      y="83"
+      text-anchor="middle"
+      fill="#FFFFFF"
+      font-family="Noto Sans Arabic, Tajawal, sans-serif"
+      font-weight="700"
+      font-size="7.2"
+    >للسفر والسياحة</text>
+  </g>
+</svg>

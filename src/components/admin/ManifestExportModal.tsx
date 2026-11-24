@@ -14,7 +14,7 @@ import {
   Square,
   X,
 } from 'lucide-react';
-import type { Booking, FormTemplate, SiteSettings, TravelPackage } from '../../types';
+import type { AuditActor, Booking, FormTemplate, SiteSettings, TravelPackage } from '../../types';
 import {
   buildManifestDataset,
   collectAvailableManifestColumns,
@@ -26,6 +26,7 @@ import {
   type ManifestOrientation,
   type ManifestStatusFilter,
 } from '../../utils/manifestExport';
+import { logAuditEvent } from '../../services/firestoreService';
 import { BrandLogo } from '../BrandLogo';
 import { useToast } from '../ToastProvider';
 
@@ -39,6 +40,7 @@ interface ManifestExportModalProps {
   forms: FormTemplate[];
   settings: SiteSettings;
   initialPackageId?: string;
+  actor?: AuditActor;
   onClose: () => void;
 }
 
@@ -50,6 +52,7 @@ export const ManifestExportModal: React.FC<ManifestExportModalProps> = ({
   forms,
   settings,
   initialPackageId = 'all',
+  actor,
   onClose,
 }) => {
   const { showToast } = useToast();
@@ -214,6 +217,16 @@ export const ManifestExportModal: React.FC<ManifestExportModalProps> = ({
         settings,
         packageLabel,
       });
+      if (actor) {
+        await logAuditEvent({
+          action: 'manifest_exported',
+          actor,
+          targetType: 'manifest',
+          targetId: packageIdFilter || 'all',
+          summary: `تصدير كشف المسافرين (Excel): ${reportTitle || packageLabel}`,
+          details: `عدد المسافرين: ${dataset.totalTravelers} · الملف: ${fileName}`,
+        });
+      }
       showToast(`تم تنزيل ملف Excel بنجاح: ${fileName}`, 'success');
     } catch (err) {
       console.error(err);
@@ -241,6 +254,16 @@ export const ManifestExportModal: React.FC<ManifestExportModalProps> = ({
         settings,
         packageLabel,
       });
+      if (actor) {
+        await logAuditEvent({
+          action: 'manifest_exported',
+          actor,
+          targetType: 'manifest',
+          targetId: packageIdFilter || 'all',
+          summary: `تصدير كشف المسافرين (PDF): ${reportTitle || packageLabel}`,
+          details: `عدد المسافرين: ${dataset.totalTravelers} · الملف: ${fileName}`,
+        });
+      }
       showToast(`تم تنزيل ملف PDF بنجاح: ${fileName}`, 'success');
     } catch (err) {
       console.error(err);

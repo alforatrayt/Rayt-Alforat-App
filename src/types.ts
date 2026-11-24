@@ -206,14 +206,82 @@ export interface StaffPermissions {
 
 export interface StaffMember {
   id: string;
+  uid?: string;
   email: string;
   name: string;
   role: StaffRole;
   active: boolean;
   permissions: StaffPermissions;
+  mustChangePassword?: boolean;
+  totpEnabled?: boolean;
+  totpVerified?: boolean;
+  totpSecret?: string;
+  failedAttempts?: number;
+  lockedUntil?: number;
+  lastLoginAt?: Timestamp | Date | string;
   createdAt?: Timestamp | Date | string;
   updatedAt?: Timestamp | Date | string;
 }
+
+export type AuditLogAction =
+  | 'login_success'
+  | 'login_locked'
+  | 'password_changed'
+  | '2fa_enrolled'
+  | '2fa_owner_toggled'
+  | '2fa_reset'
+  | 'staff_created'
+  | 'staff_updated'
+  | 'staff_frozen'
+  | 'staff_activated'
+  | 'staff_deleted'
+  | 'payment_added'
+  | 'payment_removed'
+  | 'bus_assigned'
+  | 'booking_status_updated'
+  | 'booking_deleted'
+  | 'manifest_exported'
+  | 'financial_report_exported';
+
+export interface AuditActor {
+  email: string;
+  name: string;
+  role: string;
+}
+
+export interface AuditLog {
+  id: string;
+  action: AuditLogAction;
+  actorEmail: string;
+  actorName: string;
+  actorRole: string;
+  targetType: string;
+  targetId: string;
+  summary: string;
+  details: string;
+  createdAt?: Timestamp | Date | string;
+}
+
+export const AUDIT_ACTION_LABELS: Record<AuditLogAction, string> = {
+  login_success: 'تسجيل دخول ناجح',
+  login_locked: 'قفل مؤقت بعد محاولات فاشلة',
+  password_changed: 'تغيير كلمة المرور الإجباري',
+  '2fa_enrolled': 'تفعيل وربط المصادقة الثنائية (2FA)',
+  '2fa_owner_toggled': 'تحديث إعداد 2FA للمالك',
+  '2fa_reset': 'إعادة تعيين 2FA لموظف',
+  staff_created: 'إنشاء حساب موظف جديد',
+  staff_updated: 'تعديل صلاحيات موظف',
+  staff_frozen: 'إيقاف / تجميد حساب موظف',
+  staff_activated: 'إعادة تفعيل حساب موظف',
+  staff_deleted: 'حذف حساب موظف',
+  payment_added: 'إضافة دفعة مالية',
+  payment_removed: 'حذف دفعة مالية',
+  bus_assigned: 'تسكين حجز في حافلة',
+  booking_status_updated: 'تحديث حالة حجز وملاحظات',
+  booking_deleted: 'حذف حجز نهائياً',
+  manifest_exported: 'تصدير كشف مسافرين',
+  financial_report_exported: 'تصدير تقرير مالي',
+};
 
 export interface SeasonPoster {
   id: string;

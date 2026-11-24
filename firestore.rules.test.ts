@@ -104,13 +104,13 @@ export const DIRTY_DOZEN_TESTS: SecurityTestCase[] = [
   },
   {
     id: 10,
-    name: 'Staff Self-Role Escalation',
+    name: 'Staff Self-Role Elevation Blocked',
     operation: 'update',
     path: '/staff/sales@agency.com',
     auth: { uid: 'sales_1', email: 'sales@agency.com', email_verified: true },
     payload: { role: 'super_admin' },
     expected: 'PERMISSION_DENIED',
-    enforcedBy: "hasPermission('manageStaff')",
+    enforcedBy: 'Tier 1 Owner-only update for role/permissions/active',
   },
   {
     id: 11,
@@ -130,6 +130,6 @@ export const DIRTY_DOZEN_TESTS: SecurityTestCase[] = [
     auth: { uid: 'sales_1', email: 'sales@agency.com', email_verified: true },
     payload: { status: 'confirmed' },
     expected: 'PERMISSION_DENIED',
-    enforcedBy: "(existing().status != 'cancelled' || isSuperAdmin())",
+    enforcedBy: '(existing().status != \'cancelled\' || isSuperAdmin())',
   },
 ];

@@ -4,8 +4,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth } from './firebase';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
+import { auth, isAuthorizedOwnerUser, isPasswordStaffUser } from './firebase';
 import {
   DEFAULT_FORM_TEMPLATES,
   DEFAULT_SEASON_POSTERS,
@@ -34,12 +34,14 @@ import { PackageDetailView } from './components/PackageDetailView';
 import { DynamicBookingView } from './components/DynamicBookingView';
 import { TrackBookingView } from './components/TrackBookingView';
 import { AdminDashboard, type AdminTab } from './components/admin/AdminDashboard';
+import { OfflineIndicator } from './components/PWAInstallButton';
 
 function AppShell() {
   const [route, setRoute] = useState<PublicRoute>('home');
   const [adminInitialTab, setAdminInitialTab] = useState<AdminTab>('overview');
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [blockedAuthEmail, setBlockedAuthEmail] = useState<string>('');
 
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
   const [categories, setCategories] = useState<PackageCategory[]>([]);
@@ -64,9 +66,30 @@ function AppShell() {
     root.style.setProperty('--brand-bg', settings.bgColor || '#F8F4EC');
   }, [settings]);
 
-  // Auth listener
+  // Global Auth Firewall Listener:
+  // Permits ONLY verified Google Owner (alforat.rayt@gmail.com) OR provisioned Email/Password Staff
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (currentUser) => {
+    const unsub = onAuthStateChanged(auth, async (currentUser) => {
+      if (
+        currentUser &&
+        !isAuthorizedOwnerUser(currentUser) &&
+        !isPasswordStaffUser(currentUser)
+      ) {
+        const rejectedEmail = currentUser.email || 'حساب غير مصرح';
+        setBlockedAuthEmail(rejectedEmail);
+        setUser(null);
+        setAuthReady(true);
+        try {
+          await signOut(auth);
+        } catch {
+          // ignore sign-out error
+        }
+        return;
+      }
+
+      if (currentUser) {
+        setBlockedAuthEmail('');
+      }
       setUser(currentUser);
       setAuthReady(true);
     });
@@ -187,6 +210,8 @@ function AppShell() {
       <AdminDashboard
         user={user}
         authReady={authReady}
+        blockedAuthEmail={blockedAuthEmail}
+        onClearBlockedAuth={() => setBlockedAuthEmail('')}
         settings={settings}
         initialTab={adminInitialTab}
         onSettingsUpdated={(updated) => setSettings(updated)}
@@ -258,6 +283,7 @@ function AppShell() {
       </main>
 
       <Footer settings={settings} onNavigate={handleNavigate} />
+      <OfflineIndicator />
     </div>
   );
 }

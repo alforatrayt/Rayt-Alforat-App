@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings2,
+  Share2,
 } from 'lucide-react';
 import {
   TRIP_TYPE_LABELS,
@@ -25,6 +26,8 @@ import {
   type TravelPackage,
 } from '../types';
 import { ASSET_IMAGES } from '../data/defaults';
+import { useToast } from './ToastProvider';
+import { shareSiteOrPackage } from '../utils/shareUtils';
 
 interface HomeViewProps {
   settings: SiteSettings;
@@ -56,6 +59,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [posterModalOpen, setPosterModalOpen] = useState(false);
   const [activePosterIndex, setActivePosterIndex] = useState(0);
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
+  const { showToast } = useToast();
+
+  const handleSharePackage = async (e: React.MouseEvent, pkg: TravelPackage) => {
+    e.stopPropagation();
+    await shareSiteOrPackage(
+      {
+        title: `${pkg.title} — ${settings.agencyName}`,
+        text: `اكتشف عرض "${pkg.title}" إلى ${pkg.destination} (${pkg.price.toLocaleString('ar-SA')} ${pkg.currency}) مع مكتب راية الفرات`,
+      },
+      (msg) => showToast(msg, 'success')
+    );
+  };
 
   const activePosters = useMemo(
     () => posters.filter((p) => p.active && Boolean(p.imageUrl)),
@@ -179,6 +194,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             />
           )}
+          <button
+            type="button"
+            onClick={(e) => handleSharePackage(e, pkg)}
+            title="مشاركة الباقة"
+            aria-label={`مشاركة ${pkg.title}`}
+            className="absolute top-3 left-3 w-9 h-9 rounded-xl bg-white/90 hover:bg-white text-[#0F332B] flex items-center justify-center shadow-sm transition-transform hover:scale-105"
+          >
+            <Share2 className="w-4 h-4 text-[#0E6E73]" />
+          </button>
           <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/55 to-transparent" />
           <div className="absolute bottom-3 right-4 left-4 flex items-center justify-between text-xs text-white/95 font-medium">
             <span className="inline-flex items-center gap-1.5">

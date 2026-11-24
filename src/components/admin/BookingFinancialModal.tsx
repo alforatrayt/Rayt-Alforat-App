@@ -12,6 +12,7 @@ import {
 import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS,
+  type AuditActor,
   type Booking,
   type BookingPayment,
   type PaymentMethod,
@@ -19,6 +20,7 @@ import {
 } from '../../types';
 import {
   computeBookingFinancialTotals,
+  logAuditEvent,
   saveBookingFinancials,
   updateBookingBusAssignment,
 } from '../../services/firestoreService';
@@ -30,6 +32,7 @@ interface BookingFinancialModalProps {
   allBookings: Booking[];
   pkg?: TravelPackage;
   currentUserEmail?: string;
+  actor?: AuditActor;
   onUpdated: (updatedBooking: Booking) => void;
   onRefresh: () => Promise<void>;
   onClose: () => void;
@@ -40,6 +43,7 @@ export const BookingFinancialModal: React.FC<BookingFinancialModalProps> = ({
   allBookings,
   pkg,
   currentUserEmail,
+  actor,
   onUpdated,
   onRefresh,
   onClose,
@@ -102,6 +106,18 @@ export const BookingFinancialModal: React.FC<BookingFinancialModalProps> = ({
       };
       setLocalBooking(next);
       onUpdated(next);
+      if (actor) {
+        await logAuditEvent({
+          action: 'bus_assigned',
+          actor,
+          targetType: 'booking',
+          targetId: localBooking.bookingRef,
+          summary: res.busName
+            ? `تسكين الحجز ${localBooking.bookingRef} في الحافلة: ${res.busName}`
+            : `إلغاء تعيين الحافلة للحجز ${localBooking.bookingRef}`,
+          details: `العميل: ${localBooking.customerName}`,
+        });
+      }
       showToast(
         res.busName
           ? `تم تسكين الحجز في: ${res.busName}`
@@ -151,6 +167,16 @@ export const BookingFinancialModal: React.FC<BookingFinancialModalProps> = ({
       };
       setLocalBooking(next);
       onUpdated(next);
+      if (actor) {
+        await logAuditEvent({
+          action: 'payment_added',
+          actor,
+          targetType: 'booking',
+          targetId: localBooking.bookingRef,
+          summary: `تسجيل دفعة مالية (${newPayment.amount} ${localBooking.currency}) للحجز ${localBooking.bookingRef}`,
+          details: `الوسيلة: ${PAYMENT_METHOD_LABELS[newPayment.method]} · العميل: ${localBooking.customerName}`,
+        });
+      }
       setAmountInput('');
       setNoteInput('');
       showToast('تم تسجيل الدفعة وتحديث السجل المالي بنجاح', 'success');
@@ -163,6 +189,7 @@ export const BookingFinancialModal: React.FC<BookingFinancialModalProps> = ({
   };
 
   const handleRemovePayment = async (paymentId: string) => {
+    const removedPayment = payments.find((p) => p.id === paymentId);
     const nextPayments = payments.filter((p) => p.id !== paymentId);
     setSavingPayments(true);
     try {
@@ -176,6 +203,16 @@ export const BookingFinancialModal: React.FC<BookingFinancialModalProps> = ({
       };
       setLocalBooking(next);
       onUpdated(next);
+      if (actor) {
+        await logAuditEvent({
+          action: 'payment_removed',
+          actor,
+          targetType: 'booking',
+          targetId: localBooking.bookingRef,
+          summary: `حذف دفعة مالية (${removedPayment ? `${removedPayment.amount} ${localBooking.currency}` : ''}) من الحجز ${localBooking.bookingRef}`,
+          details: `العميل: ${localBooking.customerName}`,
+        });
+      }
       showToast('تم حذف الدفعة وإعادة احتساب الرصيد', 'success');
       await onRefresh();
     } catch {

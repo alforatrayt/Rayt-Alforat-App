@@ -16,6 +16,7 @@ import {
 import {
   BOOKING_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
+  type AuditActor,
   type Booking,
   type BookingAttachment,
   type BookingStatus,
@@ -27,6 +28,7 @@ import {
   computeBookingFinancialTotals,
   deleteBookingAdmin,
   fetchBookingAttachmentsAdmin,
+  logAuditEvent,
   updateBookingStatusAndNotes,
 } from '../../services/firestoreService';
 import {
@@ -45,6 +47,7 @@ interface BookingsManagerProps {
   settings: SiteSettings;
   isSuperAdmin: boolean;
   currentUserEmail?: string;
+  actor?: AuditActor;
   onRefresh: () => Promise<void>;
 }
 
@@ -63,6 +66,7 @@ export const BookingsManager: React.FC<BookingsManagerProps> = ({
   settings,
   isSuperAdmin,
   currentUserEmail,
+  actor,
   onRefresh,
 }) => {
   const { showToast } = useToast();
@@ -164,6 +168,16 @@ export const BookingsManager: React.FC<BookingsManagerProps> = ({
         editInternalNotes,
         editPublicNote
       );
+      if (actor) {
+        await logAuditEvent({
+          action: 'booking_status_updated',
+          actor,
+          targetType: 'booking',
+          targetId: selectedBooking.bookingRef,
+          summary: `تحديث حالة الحجز ${selectedBooking.bookingRef} إلى: ${BOOKING_STATUS_LABELS[editStatus]}`,
+          details: `العميل: ${selectedBooking.customerName} · الحالة السابقة: ${BOOKING_STATUS_LABELS[selectedBooking.status]}`,
+        });
+      }
       showToast('تم تحديث حالة الحجز ومزامنة صفحة متابعة العميل بنجاح', 'success');
       setSelectedBooking({
         ...selectedBooking,
@@ -183,6 +197,16 @@ export const BookingsManager: React.FC<BookingsManagerProps> = ({
     if (!selectedBooking) return;
     try {
       await deleteBookingAdmin(selectedBooking);
+      if (actor) {
+        await logAuditEvent({
+          action: 'booking_deleted',
+          actor,
+          targetType: 'booking',
+          targetId: selectedBooking.bookingRef,
+          summary: `حذف الحجز ${selectedBooking.bookingRef} نهائياً`,
+          details: `العميل: ${selectedBooking.customerName} · الباقة: ${selectedBooking.packageTitle}`,
+        });
+      }
       setSelectedBooking(null);
       showToast('تم حذف الحجز نهائياً', 'success');
       await onRefresh();
@@ -696,6 +720,7 @@ export const BookingsManager: React.FC<BookingsManagerProps> = ({
           forms={forms}
           settings={settings}
           initialPackageId={packageFilter}
+          actor={actor}
           onClose={() => setManifestModalOpen(false)}
         />
       )}
@@ -706,6 +731,7 @@ export const BookingsManager: React.FC<BookingsManagerProps> = ({
           allBookings={bookings}
           pkg={packageMap.get(financialBooking.packageId)}
           currentUserEmail={currentUserEmail}
+          actor={actor}
           onUpdated={(updated) => {
             setFinancialBooking(updated);
             if (selectedBooking && selectedBooking.id === updated.id) {

@@ -238,18 +238,43 @@
     },
     "StaffMember": {
       "title": "StaffMember",
-      "description": "Authorized agency staff account and granular RBAC permission profile keyed by lowercase email.",
+      "description": "Authorized agency staff account and security/2FA/RBAC profile keyed by lowercase email.",
       "type": "object",
       "properties": {
         "email": { "type": "string", "minLength": 5, "maxLength": 128 },
+        "uid": { "type": "string", "maxLength": 128 },
         "name": { "type": "string", "minLength": 2, "maxLength": 100 },
         "role": { "type": "string", "enum": ["super_admin", "manager", "sales", "content_editor"] },
         "active": { "type": "boolean" },
         "permissions": { "type": "object" },
+        "mustChangePassword": { "type": "boolean" },
+        "totpEnabled": { "type": "boolean" },
+        "totpVerified": { "type": "boolean" },
+        "totpSecret": { "type": "string", "maxLength": 128 },
+        "failedAttempts": { "type": "number" },
+        "lockedUntil": { "type": "number" },
+        "lastLoginAt": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "name", "role", "active", "permissions", "createdAt", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable security and operational audit log entry readable only by the Super Admin owner.",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "actorEmail": { "type": "string", "minLength": 3, "maxLength": 128 },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "actorRole": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "targetType": { "type": "string", "maxLength": 60 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "summary": { "type": "string", "minLength": 2, "maxLength": 400 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["action", "actorEmail", "actorName", "actorRole", "targetType", "targetId", "summary", "details", "createdAt"]
     },
     "SeasonPoster": {
       "title": "SeasonPoster",
@@ -312,7 +337,11 @@
     },
     "/staff/{staffEmail}": {
       "schema": { "$ref": "#/entities/StaffMember" },
-      "description": "Admin and employee RBAC permission profiles"
+      "description": "Owner-managed staff accounts, 2FA TOTP enrollment state, and RBAC permissions"
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Append-only staff activity and security audit logs readable only by Main Owner"
     },
     "/seasonPosters/{posterId}": {
       "schema": { "$ref": "#/entities/SeasonPoster" },

@@ -25,40 +25,57 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function isVerifiedAuth() {
-      return request.auth != null
-        && request.auth.token.email != null
-        && request.auth.token.email_verified == true;
-    }
-
     function authEmailLower() {
       return request.auth.token.email.lower();
     }
 
+    function isGoogleVerifiedOwner() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true
+        && authEmailLower() == 'alforat.rayt@gmail.com';
+    }
+
     function isBootstrappedAdmin() {
-      return isVerifiedAuth() && authEmailLower() == 'alforat.rayt@gmail.com';
+      return isGoogleVerifiedOwner();
+    }
+
+    function isPasswordAuth() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'password'
+        && request.auth.token.email != null;
     }
 
     function hasStaffDoc() {
-      return isVerifiedAuth() && exists(/databases/$(database)/documents/staff/$(authEmailLower()));
+      return request.auth != null
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/staff/$(authEmailLower()));
     }
 
     function staffData() {
       return get(/databases/$(database)/documents/staff/$(authEmailLower())).data;
     }
 
+    function isValidPasswordStaff() {
+      return isPasswordAuth()
+        && hasStaffDoc()
+        && staffData().active == true
+        && authEmailLower() != 'alforat.rayt@gmail.com'
+        && (!('uid' in staffData()) || staffData().uid == '' || staffData().uid == request.auth.uid);
+    }
+
     function isActiveStaff() {
-      return isBootstrappedAdmin() || (hasStaffDoc() && staffData().active == true);
+      return isBootstrappedAdmin() || isValidPasswordStaff();
     }
 
     function isSuperAdmin() {
-      return isBootstrappedAdmin() || (hasStaffDoc() && staffData().active == true && staffData().role == 'super_admin');
+      return isBootstrappedAdmin() || (isValidPasswordStaff() && staffData().role == 'super_admin');
     }
 
     function hasPermission(perm) {
       return isSuperAdmin() || (
-        hasStaffDoc()
-        && staffData().active == true
+        isValidPasswordStaff()
         && staffData().permissions is map
         && staffData().permissions[perm] == true
       );
@@ -290,9 +307,14 @@ service cloud.firestore {
 
     function isValidStaffMember(data, staffEmailId) {
       return data.keys().hasAll(['email', 'name', 'role', 'active', 'permissions', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['email', 'name', 'role', 'active', 'permissions', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'email', 'uid', 'name', 'role', 'active', 'permissions',
+          'mustChangePassword', 'totpEnabled', 'totpVerified', 'totpSecret',
+          'failedAttempts', 'lockedUntil', 'lastLoginAt', 'createdAt', 'updatedAt'
+        ])
         && isValidEmailId(data.email)
         && data.email == staffEmailId
+        && (!('uid' in data) || isValidString(data.uid, 0, 128))
         && isValidString(data.name, 2, 100)
         && data.role in ['super_admin', 'manager', 'sales', 'content_editor']
         && data.active is bool
@@ -304,8 +326,35 @@ service cloud.firestore {
         && data.permissions.manageBookings is bool
         && data.permissions.manageSettings is bool
         && data.permissions.manageStaff is bool
+        && (!('mustChangePassword' in data) || data.mustChangePassword is bool)
+        && (!('totpEnabled' in data) || data.totpEnabled is bool)
+        && (!('totpVerified' in data) || data.totpVerified is bool)
+        && (!('totpSecret' in data) || isValidString(data.totpSecret, 0, 128))
+        && (!('failedAttempts' in data) || (data.failedAttempts is number && data.failedAttempts >= 0 && data.failedAttempts <= 100))
+        && (!('lockedUntil' in data) || (data.lockedUntil is number && data.lockedUntil >= 0))
+        && (!('lastLoginAt' in data) || data.lastLoginAt is timestamp)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll([
+          'action', 'actorEmail', 'actorName', 'actorRole',
+          'targetType', 'targetId', 'summary', 'details', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'action', 'actorEmail', 'actorName', 'actorRole',
+          'targetType', 'targetId', 'summary', 'details', 'createdAt'
+        ])
+        && isValidString(data.action, 2, 60)
+        && isValidString(data.actorEmail, 3, 128)
+        && isValidString(data.actorName, 1, 120)
+        && isValidString(data.actorRole, 1, 40)
+        && isValidString(data.targetType, 0, 60)
+        && isValidString(data.targetId, 0, 128)
+        && isValidString(data.summary, 2, 400)
+        && isValidString(data.details, 0, 1000)
+        && data.createdAt is timestamp;
     }
 
     function isValidSeasonPoster(data) {
@@ -326,14 +375,12 @@ service cloud.firestore {
     match /packages/{packageId} {
       allow get: if isValidId(packageId);
       allow list: if resource.data.visible == true || isActiveStaff();
-      allow create: if isVerifiedAuth()
-        && isValidId(packageId)
+      allow create: if isValidId(packageId)
         && isValidPackage(incoming())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
         && hasPermission('managePackages');
-      allow update: if isVerifiedAuth()
-        && isValidId(packageId)
+      allow update: if isValidId(packageId)
         && isValidPackage(incoming())
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
@@ -346,8 +393,7 @@ service cloud.firestore {
           'hotelInfo', 'transportInfo', 'cancellationPolicy', 'formTemplateId',
           'featured', 'visible', 'updatedAt'
         ]);
-      allow delete: if isVerifiedAuth()
-        && isValidId(packageId)
+      allow delete: if isValidId(packageId)
         && hasPermission('managePackages');
     }
 
@@ -355,14 +401,12 @@ service cloud.firestore {
     match /categories/{categoryId} {
       allow get: if isValidId(categoryId);
       allow list: if resource.data.active == true || isActiveStaff();
-      allow create: if isVerifiedAuth()
-        && isValidId(categoryId)
+      allow create: if isValidId(categoryId)
         && isValidCategory(incoming())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
         && hasPermission('managePackages');
-      allow update: if isVerifiedAuth()
-        && isValidId(categoryId)
+      allow update: if isValidId(categoryId)
         && isValidCategory(incoming())
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
@@ -370,8 +414,7 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'name', 'description', 'order', 'active', 'updatedAt'
         ]);
-      allow delete: if isVerifiedAuth()
-        && isValidId(categoryId)
+      allow delete: if isValidId(categoryId)
         && hasPermission('managePackages');
     }
 
@@ -379,14 +422,12 @@ service cloud.firestore {
     match /formTemplates/{formId} {
       allow get: if isValidId(formId);
       allow list: if resource.data.isDefault == true || isActiveStaff();
-      allow create: if isVerifiedAuth()
-        && isValidId(formId)
+      allow create: if isValidId(formId)
         && isValidFormTemplate(incoming())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
         && hasPermission('manageForms');
-      allow update: if isVerifiedAuth()
-        && isValidId(formId)
+      allow update: if isValidId(formId)
         && isValidFormTemplate(incoming())
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
@@ -394,15 +435,14 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'name', 'description', 'isDefault', 'fields', 'updatedAt'
         ]);
-      allow delete: if isVerifiedAuth()
-        && isValidId(formId)
+      allow delete: if isValidId(formId)
         && hasPermission('manageForms');
     }
 
     // 3. Bookings (PII Isolated: Atomic Public Create Only, Staff Read/Update)
     match /bookings/{bookingId} {
-      allow get: if isVerifiedAuth() && isValidId(bookingId) && isActiveStaff();
-      allow list: if isVerifiedAuth() && isActiveStaff();
+      allow get: if isValidId(bookingId) && isActiveStaff();
+      allow list: if isActiveStaff();
       allow create: if isValidId(bookingId)
         && isValidBooking(incoming())
         && incoming().status == 'pending_review'
@@ -416,8 +456,7 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/packages/$(incoming().packageId))
         && existsAfter(/databases/$(database)/documents/bookingTrackers/$(incoming().trackerId))
         && getAfter(/databases/$(database)/documents/bookingTrackers/$(incoming().trackerId)).data.bookingId == bookingId;
-      allow update: if isVerifiedAuth()
-        && isValidId(bookingId)
+      allow update: if isValidId(bookingId)
         && isValidBooking(incoming())
         && incoming().createdAt == existing().createdAt
         && incoming().bookingRef == existing().bookingRef
@@ -437,24 +476,21 @@ service cloud.firestore {
             'paidAmount', 'remainingAmount', 'paymentStatus', 'payments', 'updatedAt'
           ])
         );
-      allow delete: if isVerifiedAuth()
-        && isValidId(bookingId)
+      allow delete: if isValidId(bookingId)
         && isSuperAdmin();
 
       // 3b. Booking Attachments (Master Gate: Passport/ID copies, Staff-only Read)
       match /attachments/{attachmentId} {
-        allow get: if isVerifiedAuth()
-          && isValidId(bookingId)
+        allow get: if isValidId(bookingId)
           && isValidId(attachmentId)
           && isActiveStaff();
-        allow list: if isVerifiedAuth() && isActiveStaff();
+        allow list: if isActiveStaff();
         allow create: if isValidId(bookingId)
           && isValidId(attachmentId)
           && isValidAttachment(incoming(), bookingId)
           && incoming().createdAt == request.time
           && existsAfter(/databases/$(database)/documents/bookings/$(bookingId));
-        allow delete: if isVerifiedAuth()
-          && isValidId(bookingId)
+        allow delete: if isValidId(bookingId)
           && isValidId(attachmentId)
           && isSuperAdmin();
       }
@@ -473,8 +509,7 @@ service cloud.firestore {
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
         && existsAfter(/databases/$(database)/documents/bookings/$(incoming().bookingId));
-      allow update: if isVerifiedAuth()
-        && isValidId(trackerId)
+      allow update: if isValidId(trackerId)
         && isValidBookingTracker(incoming())
         && incoming().bookingId == existing().bookingId
         && incoming().bookingRef == existing().bookingRef
@@ -486,8 +521,7 @@ service cloud.firestore {
           'status', 'publicStatusNote', 'busName', 'paidAmount',
           'remainingAmount', 'paymentStatus', 'updatedAt'
         ]);
-      allow delete: if isVerifiedAuth()
-        && isValidId(trackerId)
+      allow delete: if isValidId(trackerId)
         && isSuperAdmin();
     }
 
@@ -495,13 +529,11 @@ service cloud.firestore {
     match /siteSettings/{settingId} {
       allow get: if isValidId(settingId);
       allow list: if false;
-      allow create: if isVerifiedAuth()
-        && isValidId(settingId)
+      allow create: if isValidId(settingId)
         && isValidSiteSettings(incoming())
         && incoming().updatedAt == request.time
         && hasPermission('manageSettings');
-      allow update: if isVerifiedAuth()
-        && isValidId(settingId)
+      allow update: if isValidId(settingId)
         && isValidSiteSettings(incoming())
         && incoming().updatedAt == request.time
         && hasPermission('manageSettings')
@@ -516,46 +548,76 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 6. Staff & RBAC Profiles (Self-Read or Staff Manager Read/Write)
+    // 6. Staff Accounts & 2FA Security Profiles (Owner Full Control, Staff Self-Onboarding Only)
     match /staff/{staffEmail} {
-      allow get: if isVerifiedAuth()
-        && isValidEmailId(staffEmail)
-        && (authEmailLower() == staffEmail || hasPermission('manageStaff'));
-      allow list: if isVerifiedAuth() && hasPermission('manageStaff');
-      allow create: if isVerifiedAuth()
+      allow get: if isValidEmailId(staffEmail) && (
+        isBootstrappedAdmin() ||
+        (isPasswordAuth() && authEmailLower() == staffEmail)
+      );
+      allow list: if isBootstrappedAdmin();
+      allow create: if isBootstrappedAdmin()
         && isValidEmailId(staffEmail)
         && isValidStaffMember(incoming(), staffEmail)
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time
-        && hasPermission('manageStaff');
-      allow update: if isVerifiedAuth()
-        && isValidEmailId(staffEmail)
+        && incoming().updatedAt == request.time;
+      allow update: if isValidEmailId(staffEmail)
         && isValidStaffMember(incoming(), staffEmail)
         && incoming().email == existing().email
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && hasPermission('manageStaff')
-        && incoming().diff(existing()).affectedKeys().hasOnly([
-          'name', 'role', 'active', 'permissions', 'updatedAt'
-        ]);
-      allow delete: if isVerifiedAuth()
+        && (
+          // Tier 1: Main Owner (alforat.rayt@gmail.com via Google) can manage any staff, freeze, or reset 2FA
+          (isBootstrappedAdmin() && incoming().diff(existing()).affectedKeys().hasOnly([
+            'uid', 'name', 'role', 'active', 'permissions', 'mustChangePassword',
+            'totpEnabled', 'totpVerified', 'totpSecret', 'failedAttempts',
+            'lockedUntil', 'lastLoginAt', 'updatedAt'
+          ])) ||
+          // Tier 2: Active Password Staff can ONLY complete password change, initial 2FA setup, failed TOTP lockout, and lastLoginAt
+          (isValidPasswordStaff()
+            && authEmailLower() == staffEmail
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'mustChangePassword', 'totpEnabled', 'totpVerified', 'totpSecret',
+              'failedAttempts', 'lockedUntil', 'lastLoginAt', 'updatedAt'
+            ])
+            && (
+              !('totpVerified' in existing()) ||
+              existing().totpVerified != true ||
+              (
+                incoming().totpVerified == true &&
+                incoming().totpEnabled == true &&
+                incoming().totpSecret == existing().totpSecret
+              )
+            )
+          )
+        );
+      allow delete: if isBootstrappedAdmin()
         && isValidEmailId(staffEmail)
-        && staffEmail != 'alforat.rayt@gmail.com'
-        && hasPermission('manageStaff');
+        && staffEmail != 'alforat.rayt@gmail.com';
     }
 
-    // 7. Season Posters & Promotional Ads (Public Read for Active, Staff CRUD)
+    // 7. Audit Logs (Append-only by Active Staff/Owner, Read-Only by Main Owner)
+    match /auditLogs/{logId} {
+      allow get: if isBootstrappedAdmin() && isValidId(logId);
+      allow list: if isBootstrappedAdmin();
+      allow create: if isActiveStaff()
+        && isValidId(logId)
+        && isValidAuditLog(incoming())
+        && incoming().actorEmail == authEmailLower()
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // 8. Season Posters & Promotional Ads (Public Read for Active, Staff CRUD)
     match /seasonPosters/{posterId} {
       allow get: if isValidId(posterId);
       allow list: if resource.data.active == true || isActiveStaff();
-      allow create: if isVerifiedAuth()
-        && isValidId(posterId)
+      allow create: if isValidId(posterId)
         && isValidSeasonPoster(incoming())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
         && (hasPermission('manageSettings') || hasPermission('managePackages'));
-      allow update: if isVerifiedAuth()
-        && isValidId(posterId)
+      allow update: if isValidId(posterId)
         && isValidSeasonPoster(incoming())
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
@@ -563,8 +625,7 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'title', 'subtitle', 'imageUrl', 'active', 'order', 'updatedAt'
         ]);
-      allow delete: if isVerifiedAuth()
-        && isValidId(posterId)
+      allow delete: if isValidId(posterId)
         && (hasPermission('manageSettings') || hasPermission('managePackages'));
     }
   }

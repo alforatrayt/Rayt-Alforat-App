@@ -4,6 +4,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -11,8 +13,10 @@ import {
   updateDoc,
   where,
   writeBatch,
+  type Unsubscribe,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { db, handleFirestoreError, OperationType, staffProvisionAuth } from '../firebase';
 import {
   BOOTSTRAPPED_ADMIN_EMAIL,
   DEFAULT_FORM_TEMPLATES,
@@ -21,6 +25,9 @@ import {
 } from '../data/defaults';
 import {
   ROLE_PRESET_PERMISSIONS,
+  type AuditActor,
+  type AuditLog,
+  type AuditLogAction,
   type Booking,
   type BookingAttachment,
   type BookingPayment,
@@ -33,6 +40,8 @@ import {
   type SeasonPoster,
   type SiteSettings,
   type StaffMember,
+  type StaffPermissions,
+  type StaffRole,
   type TravelPackage,
 } from '../types';
 import { buildTrackerId, generateSafeId } from '../utils/imageCompress';
@@ -646,6 +655,27 @@ export async function fetchStaffProfileByEmail(email: string): Promise<StaffMemb
   }
 }
 
+export function subscribeStaffProfile(
+  email: string,
+  onUpdate: (profile: StaffMember | null) => void,
+  onError?: (err: unknown) => void
+): Unsubscribe {
+  const key = email.trim().toLowerCase();
+  return onSnapshot(
+    doc(db, 'staff', key),
+    (snap) => {
+      if (!snap.exists()) {
+        onUpdate(null);
+        return;
+      }
+      onUpdate({ id: snap.id, ...(snap.data() as Omit<StaffMember, 'id'>) });
+    },
+    (err) => {
+      if (onError) onError(err);
+    }
+  );
+}
+
 export async function fetchAllStaffAdmin(): Promise<StaffMember[]> {
   const path = 'staff';
   try {
@@ -656,7 +686,140 @@ export async function fetchAllStaffAdmin(): Promise<StaffMember[]> {
   }
 }
 
-export async function saveStaffMember(member: Omit<StaffMember, 'id' | 'createdAt' | 'updatedAt'>, isNew: boolean): Promise<void> {
+export async function createStaffAccountWithAuth(params: {
+  name: string;
+  email: string;
+  tempPassword: string;
+  role: StaffRole;
+  permissions: StaffPermissions;
+}): Promise<void> {
+  const key = params.email.trim().toLowerCase();
+  if (!key || key === BOOTSTRAPPED_ADMIN_EMAIL) {
+    throw new Error('لا يمكن إنشاء حساب موظف بهذا البريد الإلكتروني.');
+  }
+  const existingSnap = await getDoc(doc(db, 'staff', key));
+  if (existingSnap.exists()) {
+    const err = new Error('يوجد ملف موظف مسجل مسبقاً بهذا البريد الإلكتروني.');
+    (err as { code?: string }).code = 'staff/already-exists';
+    throw err;
+  }
+
+  let createdUid = '';
+  try {
+    const cred = await createUserWithEmailAndPassword(
+      staffProvisionAuth,
+      key,
+      params.tempPassword
+    );
+    createdUid = cred.user.uid;
+  } finally {
+    try {
+      await signOut(staffProvisionAuth);
+    } catch {
+      // ignore provisioning sign-out cleanup errors
+    }
+  }
+
+  const path = `staff/${key}`;
+  try {
+    await setDoc(doc(db, 'staff', key), {
+      email: key,
+      uid: createdUid.slice(0, 128),
+      name: params.name.trim().slice(0, 100),
+      role: params.role,
+      active: true,
+      permissions: {
+        managePackages: Boolean(params.permissions.managePackages),
+        manageForms: Boolean(params.permissions.manageForms),
+        manageBookings: Boolean(params.permissions.manageBookings),
+        manageSettings: Boolean(params.permissions.manageSettings),
+        manageStaff: false, // Only Main Owner manages staff & audit logs
+      },
+      mustChangePassword: true,
+      totpEnabled: true,
+      totpVerified: false,
+      totpSecret: '',
+      failedAttempts: 0,
+      lockedUntil: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateStaffSecurityProfile(
+  email: string,
+  updates: {
+    uid?: string;
+    name?: string;
+    role?: StaffRole;
+    active?: boolean;
+    permissions?: StaffPermissions;
+    mustChangePassword?: boolean;
+    totpEnabled?: boolean;
+    totpVerified?: boolean;
+    totpSecret?: string;
+    failedAttempts?: number;
+    lockedUntil?: number;
+    touchLastLogin?: boolean;
+  }
+): Promise<void> {
+  const key = email.trim().toLowerCase();
+  const path = `staff/${key}`;
+  try {
+    const payload: Record<string, unknown> = {
+      updatedAt: serverTimestamp(),
+    };
+    if (updates.uid !== undefined) payload.uid = updates.uid.slice(0, 128);
+    if (updates.name !== undefined) payload.name = updates.name.trim().slice(0, 100);
+    if (updates.role !== undefined) payload.role = updates.role;
+    if (updates.active !== undefined) payload.active = Boolean(updates.active);
+    if (updates.permissions !== undefined) {
+      payload.permissions = {
+        managePackages: Boolean(updates.permissions.managePackages),
+        manageForms: Boolean(updates.permissions.manageForms),
+        manageBookings: Boolean(updates.permissions.manageBookings),
+        manageSettings: Boolean(updates.permissions.manageSettings),
+        manageStaff:
+          key === BOOTSTRAPPED_ADMIN_EMAIL
+            ? Boolean(updates.permissions.manageStaff)
+            : false,
+      };
+    }
+    if (updates.mustChangePassword !== undefined) {
+      payload.mustChangePassword = Boolean(updates.mustChangePassword);
+    }
+    if (updates.totpEnabled !== undefined) {
+      payload.totpEnabled = Boolean(updates.totpEnabled);
+    }
+    if (updates.totpVerified !== undefined) {
+      payload.totpVerified = Boolean(updates.totpVerified);
+    }
+    if (updates.totpSecret !== undefined) {
+      payload.totpSecret = updates.totpSecret.trim().slice(0, 128);
+    }
+    if (updates.failedAttempts !== undefined) {
+      payload.failedAttempts = Math.max(0, Math.min(100, Number(updates.failedAttempts) || 0));
+    }
+    if (updates.lockedUntil !== undefined) {
+      payload.lockedUntil = Math.max(0, Number(updates.lockedUntil) || 0);
+    }
+    if (updates.touchLastLogin) {
+      payload.lastLoginAt = serverTimestamp();
+    }
+
+    await updateDoc(doc(db, 'staff', key), payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function saveStaffMember(
+  member: Omit<StaffMember, 'id' | 'createdAt' | 'updatedAt'>,
+  isNew: boolean
+): Promise<void> {
   const key = member.email.trim().toLowerCase();
   const path = `staff/${key}`;
   try {
@@ -670,7 +833,7 @@ export async function saveStaffMember(member: Omit<StaffMember, 'id' | 'createdA
         manageForms: Boolean(member.permissions.manageForms),
         manageBookings: Boolean(member.permissions.manageBookings),
         manageSettings: Boolean(member.permissions.manageSettings),
-        manageStaff: Boolean(member.permissions.manageStaff),
+        manageStaff: key === BOOTSTRAPPED_ADMIN_EMAIL ? Boolean(member.permissions.manageStaff) : false,
       },
       updatedAt: serverTimestamp(),
     };
@@ -700,6 +863,48 @@ export async function deleteStaffMember(email: string): Promise<void> {
     await deleteDoc(doc(db, 'staff', key));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// ==================== AUDIT LOGS ====================
+
+export async function logAuditEvent(params: {
+  action: AuditLogAction;
+  actor: AuditActor;
+  targetType?: string;
+  targetId?: string;
+  summary: string;
+  details?: string;
+}): Promise<void> {
+  const actorEmail = (params.actor.email || '').trim().toLowerCase();
+  if (!actorEmail) return;
+  const logId = generateSafeId('audit');
+  try {
+    await setDoc(doc(db, 'auditLogs', logId), {
+      action: params.action.slice(0, 60),
+      actorEmail: actorEmail.slice(0, 128),
+      actorName: (params.actor.name || actorEmail).trim().slice(0, 120) || 'مستخدم',
+      actorRole: (params.actor.role || 'staff').trim().slice(0, 40) || 'staff',
+      targetType: (params.targetType || '').trim().slice(0, 60),
+      targetId: (params.targetId || '').trim().slice(0, 128),
+      summary: params.summary.trim().slice(0, 400) || params.action,
+      details: (params.details || '').trim().slice(0, 1000),
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    // Best-effort logging: never crash primary operation if audit write fails
+    console.warn('Audit log write skipped:', error);
+  }
+}
+
+export async function fetchAuditLogsOwnerOnly(maxItems = 250): Promise<AuditLog[]> {
+  const path = 'auditLogs';
+  try {
+    const q = query(collection(db, 'auditLogs'), orderBy('createdAt', 'desc'), limit(maxItems));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AuditLog, 'id'>) }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
   }
 }
 

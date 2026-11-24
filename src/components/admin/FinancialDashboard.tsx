@@ -18,6 +18,7 @@ import {
   BOOKING_STATUS_LABELS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS,
+  type AuditActor,
   type Booking,
   type SiteSettings,
   type TravelPackage,
@@ -28,7 +29,10 @@ import {
   exportFinancialReportToPdf,
   type FinancialFilterMode,
 } from '../../utils/financialExport';
-import { computeBookingFinancialTotals } from '../../services/firestoreService';
+import {
+  computeBookingFinancialTotals,
+  logAuditEvent,
+} from '../../services/firestoreService';
 import { useToast } from '../ToastProvider';
 import { BookingFinancialModal } from './BookingFinancialModal';
 
@@ -37,6 +41,7 @@ interface FinancialDashboardProps {
   packages: TravelPackage[];
   settings: SiteSettings;
   currentUserEmail?: string;
+  actor?: AuditActor;
   onRefresh: () => Promise<void>;
 }
 
@@ -57,6 +62,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
   packages,
   settings,
   currentUserEmail,
+  actor,
   onRefresh,
 }) => {
   const { showToast } = useToast();
@@ -181,6 +187,16 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
     setExportingExcel(true);
     try {
       const fileName = await exportFinancialReportToExcel({ dataset, settings });
+      if (actor) {
+        await logAuditEvent({
+          action: 'financial_report_exported',
+          actor,
+          targetType: 'financial_report',
+          targetId: mode,
+          summary: `تصدير التقرير المالي (Excel): ${dataset.scopeTitle}`,
+          details: `المحصّل: ${dataset.totalCollected} ${dataset.currency} · الملف: ${fileName}`,
+        });
+      }
       showToast(`تم تصدير التقرير المالي (${fileName}) بنجاح`, 'success');
     } catch (err) {
       console.error(err);
@@ -194,6 +210,16 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
     setExportingPdf(true);
     try {
       const fileName = await exportFinancialReportToPdf({ dataset, settings });
+      if (actor) {
+        await logAuditEvent({
+          action: 'financial_report_exported',
+          actor,
+          targetType: 'financial_report',
+          targetId: mode,
+          summary: `تصدير التقرير المالي (PDF): ${dataset.scopeTitle}`,
+          details: `المحصّل: ${dataset.totalCollected} ${dataset.currency} · الملف: ${fileName}`,
+        });
+      }
       showToast(`تم تصدير التقرير المالي PDF (${fileName}) بنجاح`, 'success');
     } catch (err) {
       console.error(err);
@@ -650,6 +676,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
           allBookings={bookings}
           pkg={packageMap.get(activeBookingModal.packageId)}
           currentUserEmail={currentUserEmail}
+          actor={actor}
           onUpdated={(updated) => setActiveBookingModal(updated)}
           onRefresh={onRefresh}
           onClose={() => setActiveBookingModal(null)}

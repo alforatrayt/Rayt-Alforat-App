@@ -4,7 +4,7 @@
 1. **PII Isolation**: Customer PII (`bookings` and `bookings/{bookingId}/attachments`) can NEVER be read or listed by unauthenticated users or non-staff accounts. Public tracking operates exclusively via single-document `get` on `bookingTrackers/{REF_PHONE}` with zero PII and `allow list: if false`.
 2. **Referential & Atomic Integrity**: A `booking` cannot be created for a non-existent `packageId`. A `bookingTracker` cannot be created without an atomic matching `bookings/{bookingId}` write (`existsAfter`), and an `attachment` cannot be created without an atomic matching `bookings/{bookingId}` write.
 3. **Initial State Enforcement**: Guest bookings MUST enter with `status == 'pending_review'` and empty `internalNotes == ''` and `publicStatusNote == ''`.
-4. **RBAC Privilege Protection**: Non-super-admins cannot modify `staff` documents or elevate their own role. All admin checks require `request.auth.token.email_verified == true`.
+4. **Hybrid Owner-Google + Staff-2FA Security**: Google OAuth login is strictly whitelisted to verified `alforat.rayt@gmail.com` (`sign_in_provider == 'google.com' && email_verified == true`). Staff accounts use Owner-provisioned Email/Password (`sign_in_provider == 'password'`) with forced initial password change, mandatory TOTP 2FA enrollment, and real-time `active == true` revocation. Staff can never elevate roles, disable their own verified 2FA, or read/delete `auditLogs`.
 5. **Temporal Integrity**: `createdAt == request.time` on creation and `updatedAt == request.time` on updates. `createdAt` is immutable after creation.
 6. **Terminal State Locking**: Once a booking reaches `status == 'cancelled'`, non-super-admin staff cannot mutate it.
 

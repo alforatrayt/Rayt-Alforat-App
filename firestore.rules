@@ -1,0 +1,571 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==================== PRIMITIVES & IDENTITY ====================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidEmailId(id) {
+      return id is string && id.size() >= 5 && id.size() <= 128 && id.matches('^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]{2,}$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isVerifiedAuth() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function authEmailLower() {
+      return request.auth.token.email.lower();
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedAuth() && authEmailLower() == 'alforat.rayt@gmail.com';
+    }
+
+    function hasStaffDoc() {
+      return isVerifiedAuth() && exists(/databases/$(database)/documents/staff/$(authEmailLower()));
+    }
+
+    function staffData() {
+      return get(/databases/$(database)/documents/staff/$(authEmailLower())).data;
+    }
+
+    function isActiveStaff() {
+      return isBootstrappedAdmin() || (hasStaffDoc() && staffData().active == true);
+    }
+
+    function isSuperAdmin() {
+      return isBootstrappedAdmin() || (hasStaffDoc() && staffData().active == true && staffData().role == 'super_admin');
+    }
+
+    function hasPermission(perm) {
+      return isSuperAdmin() || (
+        hasStaffDoc()
+        && staffData().active == true
+        && staffData().permissions is map
+        && staffData().permissions[perm] == true
+      );
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidBoundedStringList(arr, maxItems) {
+      return arr is list
+        && arr.size() <= maxItems
+        && (arr.size() == 0 || (arr[0] is string && arr[0].size() <= 500));
+    }
+
+    function isValidBoundedMapList(arr, maxItems) {
+      return arr is list
+        && arr.size() <= maxItems
+        && (arr.size() == 0 || arr[0] is map);
+    }
+
+    // ==================== VALIDATION BLUEPRINTS ====================
+
+    function isValidPackage(data) {
+      return data.keys().hasAll([
+          'title', 'subtitle', 'destination', 'tripType', 'durationDays',
+          'durationNights', 'durationLabel', 'departureDate', 'price',
+          'childPrice', 'infantPrice', 'currency', 'availableSeats',
+          'coverImage', 'highlights', 'itinerary', 'inclusions', 'exclusions',
+          'hotelInfo', 'transportInfo', 'cancellationPolicy', 'formTemplateId',
+          'featured', 'visible', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'title', 'subtitle', 'destination', 'tripType', 'categoryId', 'durationDays',
+          'durationNights', 'durationLabel', 'departureDate', 'price',
+          'childPrice', 'infantPrice', 'currency', 'availableSeats', 'buses',
+          'coverImage', 'highlights', 'itinerary', 'inclusions', 'exclusions',
+          'hotelInfo', 'transportInfo', 'cancellationPolicy', 'formTemplateId',
+          'featured', 'visible', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.title, 2, 160)
+        && isValidString(data.subtitle, 0, 240)
+        && isValidString(data.destination, 2, 100)
+        && data.tripType in ['umrah', 'family', 'honeymoon', 'tourism', 'vip']
+        && (!('categoryId' in data) || data.categoryId == '' || isValidId(data.categoryId))
+        && data.durationDays is number && data.durationDays >= 1 && data.durationDays <= 90
+        && data.durationNights is number && data.durationNights >= 0 && data.durationNights <= 90
+        && isValidString(data.durationLabel, 1, 60)
+        && isValidString(data.departureDate, 4, 60)
+        && data.price is number && data.price >= 0 && data.price <= 500000
+        && data.childPrice is number && data.childPrice >= 0 && data.childPrice <= 500000
+        && data.infantPrice is number && data.infantPrice >= 0 && data.infantPrice <= 500000
+        && isValidString(data.currency, 1, 20)
+        && data.availableSeats is number && data.availableSeats >= 0 && data.availableSeats <= 2000
+        && (!('buses' in data) || isValidBoundedMapList(data.buses, 30))
+        && isValidString(data.coverImage, 0, 260000)
+        && isValidBoundedStringList(data.highlights, 20)
+        && isValidBoundedMapList(data.itinerary, 35)
+        && isValidBoundedStringList(data.inclusions, 30)
+        && isValidBoundedStringList(data.exclusions, 30)
+        && isValidString(data.hotelInfo, 0, 1500)
+        && isValidString(data.transportInfo, 0, 1500)
+        && isValidString(data.cancellationPolicy, 0, 2000)
+        && isValidId(data.formTemplateId)
+        && data.featured is bool
+        && data.visible is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['name', 'description', 'order', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['name', 'description', 'order', 'active', 'createdAt', 'updatedAt'])
+        && isValidString(data.name, 2, 100)
+        && isValidString(data.description, 0, 300)
+        && data.order is number && data.order >= 0 && data.order <= 1000
+        && data.active is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFormTemplate(data) {
+      return data.keys().hasAll(['name', 'description', 'isDefault', 'fields', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['name', 'description', 'isDefault', 'fields', 'createdAt', 'updatedAt'])
+        && isValidString(data.name, 2, 120)
+        && isValidString(data.description, 0, 400)
+        && data.isDefault is bool
+        && isValidBoundedMapList(data.fields, 40)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll([
+          'bookingRef', 'trackerId', 'packageId', 'packageTitle', 'departureDate',
+          'formTemplateId', 'customerName', 'customerPhone', 'customerEmail',
+          'adultsCount', 'childrenCount', 'infantsCount', 'totalPrice', 'currency',
+          'travelers', 'customerNotes', 'internalNotes', 'publicStatusNote',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'bookingRef', 'trackerId', 'packageId', 'packageTitle', 'departureDate',
+          'formTemplateId', 'customerName', 'customerPhone', 'customerEmail',
+          'adultsCount', 'childrenCount', 'infantsCount', 'totalPrice', 'currency',
+          'busId', 'busName', 'paidAmount', 'remainingAmount', 'paymentStatus', 'payments',
+          'travelers', 'customerNotes', 'internalNotes', 'publicStatusNote',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.bookingRef, 5, 32)
+        && data.bookingRef.matches('^[A-Z0-9\\-]+$')
+        && isValidId(data.trackerId)
+        && isValidId(data.packageId)
+        && isValidString(data.packageTitle, 1, 160)
+        && isValidString(data.departureDate, 1, 60)
+        && isValidId(data.formTemplateId)
+        && isValidString(data.customerName, 2, 120)
+        && isValidString(data.customerPhone, 7, 30)
+        && isValidString(data.customerEmail, 0, 120)
+        && data.adultsCount is number && data.adultsCount >= 1 && data.adultsCount <= 30
+        && data.childrenCount is number && data.childrenCount >= 0 && data.childrenCount <= 30
+        && data.infantsCount is number && data.infantsCount >= 0 && data.infantsCount <= 20
+        && data.totalPrice is number && data.totalPrice >= 0 && data.totalPrice <= 5000000
+        && isValidString(data.currency, 1, 20)
+        && (!('busId' in data) || data.busId == '' || isValidId(data.busId))
+        && (!('busName' in data) || isValidString(data.busName, 0, 120))
+        && (!('paidAmount' in data) || (data.paidAmount is number && data.paidAmount >= 0 && data.paidAmount <= 5000000))
+        && (!('remainingAmount' in data) || (data.remainingAmount is number && data.remainingAmount >= 0 && data.remainingAmount <= 5000000))
+        && (!('paymentStatus' in data) || data.paymentStatus in ['unpaid', 'partial', 'paid'])
+        && (!('payments' in data) || isValidBoundedMapList(data.payments, 30))
+        && isValidBoundedMapList(data.travelers, 50)
+        && isValidString(data.customerNotes, 0, 1000)
+        && isValidString(data.internalNotes, 0, 2000)
+        && isValidString(data.publicStatusNote, 0, 500)
+        && data.status in ['pending_review', 'awaiting_payment', 'confirmed', 'cancelled']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAttachment(data, parentBookingId) {
+      return data.keys().hasAll([
+          'bookingId', 'travelerIndex', 'fieldId', 'fieldLabel',
+          'fileName', 'mimeType', 'dataUrl', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'bookingId', 'travelerIndex', 'fieldId', 'fieldLabel',
+          'fileName', 'mimeType', 'dataUrl', 'createdAt'
+        ])
+        && data.bookingId == parentBookingId
+        && isValidId(data.bookingId)
+        && data.travelerIndex is number && data.travelerIndex >= 0 && data.travelerIndex <= 50
+        && isValidString(data.fieldId, 1, 80)
+        && isValidString(data.fieldLabel, 1, 120)
+        && isValidString(data.fileName, 1, 180)
+        && isValidString(data.mimeType, 3, 80)
+        && isValidString(data.dataUrl, 10, 260000)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidBookingTracker(data) {
+      return data.keys().hasAll([
+          'bookingId', 'bookingRef', 'packageTitle', 'departureDate',
+          'travelersCount', 'totalPrice', 'currency', 'status',
+          'publicStatusNote', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'bookingId', 'bookingRef', 'packageTitle', 'departureDate',
+          'travelersCount', 'totalPrice', 'currency',
+          'busName', 'paidAmount', 'remainingAmount', 'paymentStatus',
+          'status', 'publicStatusNote', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.bookingId)
+        && isValidString(data.bookingRef, 5, 32)
+        && data.bookingRef.matches('^[A-Z0-9\\-]+$')
+        && isValidString(data.packageTitle, 1, 160)
+        && isValidString(data.departureDate, 1, 60)
+        && data.travelersCount is number && data.travelersCount >= 1 && data.travelersCount <= 80
+        && data.totalPrice is number && data.totalPrice >= 0 && data.totalPrice <= 5000000
+        && isValidString(data.currency, 1, 20)
+        && (!('busName' in data) || isValidString(data.busName, 0, 120))
+        && (!('paidAmount' in data) || (data.paidAmount is number && data.paidAmount >= 0 && data.paidAmount <= 5000000))
+        && (!('remainingAmount' in data) || (data.remainingAmount is number && data.remainingAmount >= 0 && data.remainingAmount <= 5000000))
+        && (!('paymentStatus' in data) || data.paymentStatus in ['unpaid', 'partial', 'paid'])
+        && data.status in ['pending_review', 'awaiting_payment', 'confirmed', 'cancelled']
+        && isValidString(data.publicStatusNote, 0, 500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSiteSettings(data) {
+      return data.keys().hasAll([
+          'agencyName', 'agencySubtitle', 'tagline', 'logoUrl',
+          'primaryColor', 'secondaryColor', 'accentColor', 'bgColor',
+          'heroTitle', 'heroSubtitle', 'welcomePhrase', 'contacts',
+          'email', 'address', 'whatsappNumber', 'instagramUrl',
+          'twitterUrl', 'snapchatUrl', 'termsAndConditions',
+          'defaultCancellationPolicy', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'agencyName', 'agencySubtitle', 'tagline', 'licenseNumber', 'logoUrl',
+          'primaryColor', 'secondaryColor', 'accentColor', 'bgColor',
+          'heroTitle', 'heroSubtitle', 'welcomePhrase', 'contacts',
+          'email', 'address', 'whatsappNumber', 'instagramUrl',
+          'twitterUrl', 'snapchatUrl', 'termsAndConditions',
+          'defaultCancellationPolicy', 'updatedAt'
+        ])
+        && isValidString(data.agencyName, 2, 120)
+        && isValidString(data.agencySubtitle, 0, 120)
+        && isValidString(data.tagline, 0, 180)
+        && (!('licenseNumber' in data) || isValidString(data.licenseNumber, 0, 80))
+        && isValidString(data.logoUrl, 0, 260000)
+        && isValidString(data.primaryColor, 4, 20)
+        && isValidString(data.secondaryColor, 4, 20)
+        && isValidString(data.accentColor, 4, 20)
+        && isValidString(data.bgColor, 4, 20)
+        && isValidString(data.heroTitle, 2, 180)
+        && isValidString(data.heroSubtitle, 0, 400)
+        && isValidString(data.welcomePhrase, 0, 120)
+        && isValidBoundedMapList(data.contacts, 10)
+        && isValidString(data.email, 0, 120)
+        && isValidString(data.address, 0, 240)
+        && isValidString(data.whatsappNumber, 0, 30)
+        && isValidString(data.instagramUrl, 0, 240)
+        && isValidString(data.twitterUrl, 0, 240)
+        && isValidString(data.snapchatUrl, 0, 240)
+        && isValidString(data.termsAndConditions, 0, 5000)
+        && isValidString(data.defaultCancellationPolicy, 0, 3000)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStaffMember(data, staffEmailId) {
+      return data.keys().hasAll(['email', 'name', 'role', 'active', 'permissions', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['email', 'name', 'role', 'active', 'permissions', 'createdAt', 'updatedAt'])
+        && isValidEmailId(data.email)
+        && data.email == staffEmailId
+        && isValidString(data.name, 2, 100)
+        && data.role in ['super_admin', 'manager', 'sales', 'content_editor']
+        && data.active is bool
+        && data.permissions is map
+        && data.permissions.keys().hasAll(['managePackages', 'manageForms', 'manageBookings', 'manageSettings', 'manageStaff'])
+        && data.permissions.keys().hasOnly(['managePackages', 'manageForms', 'manageBookings', 'manageSettings', 'manageStaff'])
+        && data.permissions.managePackages is bool
+        && data.permissions.manageForms is bool
+        && data.permissions.manageBookings is bool
+        && data.permissions.manageSettings is bool
+        && data.permissions.manageStaff is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSeasonPoster(data) {
+      return data.keys().hasAll(['title', 'subtitle', 'imageUrl', 'active', 'order', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['title', 'subtitle', 'imageUrl', 'active', 'order', 'createdAt', 'updatedAt'])
+        && isValidString(data.title, 2, 140)
+        && isValidString(data.subtitle, 0, 260)
+        && isValidString(data.imageUrl, 1, 350000)
+        && data.active is bool
+        && data.order is number && data.order >= 0 && data.order <= 1000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // ==================== COLLECTION RULES ====================
+
+    // 1. Travel Packages Catalog (Public Read for Visible, Staff Write)
+    match /packages/{packageId} {
+      allow get: if isValidId(packageId);
+      allow list: if resource.data.visible == true || isActiveStaff();
+      allow create: if isVerifiedAuth()
+        && isValidId(packageId)
+        && isValidPackage(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && hasPermission('managePackages');
+      allow update: if isVerifiedAuth()
+        && isValidId(packageId)
+        && isValidPackage(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && hasPermission('managePackages')
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'subtitle', 'destination', 'tripType', 'categoryId', 'durationDays',
+          'durationNights', 'durationLabel', 'departureDate', 'price',
+          'childPrice', 'infantPrice', 'currency', 'availableSeats', 'buses',
+          'coverImage', 'highlights', 'itinerary', 'inclusions', 'exclusions',
+          'hotelInfo', 'transportInfo', 'cancellationPolicy', 'formTemplateId',
+          'featured', 'visible', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedAuth()
+        && isValidId(packageId)
+        && hasPermission('managePackages');
+    }
+
+    // 1b. Dynamic Package Categories (Public Read for Active, Staff Write)
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if resource.data.active == true || isActiveStaff();
+      allow create: if isVerifiedAuth()
+        && isValidId(categoryId)
+        && isValidCategory(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && hasPermission('managePackages');
+      allow update: if isVerifiedAuth()
+        && isValidId(categoryId)
+        && isValidCategory(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && hasPermission('managePackages')
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'description', 'order', 'active', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedAuth()
+        && isValidId(categoryId)
+        && hasPermission('managePackages');
+    }
+
+    // 2. Dynamic Form Templates (Public Get & Default List, Staff Write)
+    match /formTemplates/{formId} {
+      allow get: if isValidId(formId);
+      allow list: if resource.data.isDefault == true || isActiveStaff();
+      allow create: if isVerifiedAuth()
+        && isValidId(formId)
+        && isValidFormTemplate(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && hasPermission('manageForms');
+      allow update: if isVerifiedAuth()
+        && isValidId(formId)
+        && isValidFormTemplate(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && hasPermission('manageForms')
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'description', 'isDefault', 'fields', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedAuth()
+        && isValidId(formId)
+        && hasPermission('manageForms');
+    }
+
+    // 3. Bookings (PII Isolated: Atomic Public Create Only, Staff Read/Update)
+    match /bookings/{bookingId} {
+      allow get: if isVerifiedAuth() && isValidId(bookingId) && isActiveStaff();
+      allow list: if isVerifiedAuth() && isActiveStaff();
+      allow create: if isValidId(bookingId)
+        && isValidBooking(incoming())
+        && incoming().status == 'pending_review'
+        && incoming().internalNotes == ''
+        && incoming().publicStatusNote == ''
+        && (!('paidAmount' in incoming()) || incoming().paidAmount == 0)
+        && (!('paymentStatus' in incoming()) || incoming().paymentStatus == 'unpaid')
+        && (!('payments' in incoming()) || incoming().payments.size() == 0)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/packages/$(incoming().packageId))
+        && existsAfter(/databases/$(database)/documents/bookingTrackers/$(incoming().trackerId))
+        && getAfter(/databases/$(database)/documents/bookingTrackers/$(incoming().trackerId)).data.bookingId == bookingId;
+      allow update: if isVerifiedAuth()
+        && isValidId(bookingId)
+        && isValidBooking(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().bookingRef == existing().bookingRef
+        && incoming().trackerId == existing().trackerId
+        && incoming().packageId == existing().packageId
+        && incoming().updatedAt == request.time
+        && hasPermission('manageBookings')
+        && (existing().status != 'cancelled' || isSuperAdmin())
+        && (
+          (isSuperAdmin() && incoming().diff(existing()).affectedKeys().hasOnly([
+            'status', 'internalNotes', 'publicStatusNote', 'customerNotes',
+            'totalPrice', 'travelers', 'busId', 'busName', 'paidAmount',
+            'remainingAmount', 'paymentStatus', 'payments', 'updatedAt'
+          ])) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'status', 'internalNotes', 'publicStatusNote', 'busId', 'busName',
+            'paidAmount', 'remainingAmount', 'paymentStatus', 'payments', 'updatedAt'
+          ])
+        );
+      allow delete: if isVerifiedAuth()
+        && isValidId(bookingId)
+        && isSuperAdmin();
+
+      // 3b. Booking Attachments (Master Gate: Passport/ID copies, Staff-only Read)
+      match /attachments/{attachmentId} {
+        allow get: if isVerifiedAuth()
+          && isValidId(bookingId)
+          && isValidId(attachmentId)
+          && isActiveStaff();
+        allow list: if isVerifiedAuth() && isActiveStaff();
+        allow create: if isValidId(bookingId)
+          && isValidId(attachmentId)
+          && isValidAttachment(incoming(), bookingId)
+          && incoming().createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/bookings/$(bookingId));
+        allow delete: if isVerifiedAuth()
+          && isValidId(bookingId)
+          && isValidId(attachmentId)
+          && isSuperAdmin();
+      }
+    }
+
+    // 4. Public Booking Trackers (Split Collection: Exact-Key Get Only, Zero PII, No Listing)
+    match /bookingTrackers/{trackerId} {
+      allow get: if isValidId(trackerId);
+      allow list: if false;
+      allow create: if isValidId(trackerId)
+        && isValidBookingTracker(incoming())
+        && incoming().status == 'pending_review'
+        && incoming().publicStatusNote == ''
+        && (!('paidAmount' in incoming()) || incoming().paidAmount == 0)
+        && (!('paymentStatus' in incoming()) || incoming().paymentStatus == 'unpaid')
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/bookings/$(incoming().bookingId));
+      allow update: if isVerifiedAuth()
+        && isValidId(trackerId)
+        && isValidBookingTracker(incoming())
+        && incoming().bookingId == existing().bookingId
+        && incoming().bookingRef == existing().bookingRef
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && hasPermission('manageBookings')
+        && (existing().status != 'cancelled' || isSuperAdmin())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'publicStatusNote', 'busName', 'paidAmount',
+          'remainingAmount', 'paymentStatus', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedAuth()
+        && isValidId(trackerId)
+        && isSuperAdmin();
+    }
+
+    // 5. Site Settings / CMS Branding (Public Get for 'main', Staff Write)
+    match /siteSettings/{settingId} {
+      allow get: if isValidId(settingId);
+      allow list: if false;
+      allow create: if isVerifiedAuth()
+        && isValidId(settingId)
+        && isValidSiteSettings(incoming())
+        && incoming().updatedAt == request.time
+        && hasPermission('manageSettings');
+      allow update: if isVerifiedAuth()
+        && isValidId(settingId)
+        && isValidSiteSettings(incoming())
+        && incoming().updatedAt == request.time
+        && hasPermission('manageSettings')
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'agencyName', 'agencySubtitle', 'tagline', 'licenseNumber', 'logoUrl',
+          'primaryColor', 'secondaryColor', 'accentColor', 'bgColor',
+          'heroTitle', 'heroSubtitle', 'welcomePhrase', 'contacts',
+          'email', 'address', 'whatsappNumber', 'instagramUrl',
+          'twitterUrl', 'snapchatUrl', 'termsAndConditions',
+          'defaultCancellationPolicy', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // 6. Staff & RBAC Profiles (Self-Read or Staff Manager Read/Write)
+    match /staff/{staffEmail} {
+      allow get: if isVerifiedAuth()
+        && isValidEmailId(staffEmail)
+        && (authEmailLower() == staffEmail || hasPermission('manageStaff'));
+      allow list: if isVerifiedAuth() && hasPermission('manageStaff');
+      allow create: if isVerifiedAuth()
+        && isValidEmailId(staffEmail)
+        && isValidStaffMember(incoming(), staffEmail)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && hasPermission('manageStaff');
+      allow update: if isVerifiedAuth()
+        && isValidEmailId(staffEmail)
+        && isValidStaffMember(incoming(), staffEmail)
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && hasPermission('manageStaff')
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'role', 'active', 'permissions', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedAuth()
+        && isValidEmailId(staffEmail)
+        && staffEmail != 'alforat.rayt@gmail.com'
+        && hasPermission('manageStaff');
+    }
+
+    // 7. Season Posters & Promotional Ads (Public Read for Active, Staff CRUD)
+    match /seasonPosters/{posterId} {
+      allow get: if isValidId(posterId);
+      allow list: if resource.data.active == true || isActiveStaff();
+      allow create: if isVerifiedAuth()
+        && isValidId(posterId)
+        && isValidSeasonPoster(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (hasPermission('manageSettings') || hasPermission('managePackages'));
+      allow update: if isVerifiedAuth()
+        && isValidId(posterId)
+        && isValidSeasonPoster(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (hasPermission('manageSettings') || hasPermission('managePackages'))
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'subtitle', 'imageUrl', 'active', 'order', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedAuth()
+        && isValidId(posterId)
+        && (hasPermission('manageSettings') || hasPermission('managePackages'));
+    }
+  }
+}

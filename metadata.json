@@ -1,0 +1,8 @@
+{
+  "name": "Remix راية الفُرات للسفر والسياحة",
+  "description": "منصة متكاملة لحجز وإدارة الباقات السياحية ورحلات العمرة لمكتب راية الفُرات للسفر والسياحة — رحلات، إيمان، ذكريات لا تُنسى.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

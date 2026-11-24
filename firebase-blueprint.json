@@ -1,0 +1,322 @@
+{
+  "entities": {
+    "TravelPackage": {
+      "title": "TravelPackage",
+      "description": "A tourism or Umrah travel package offered by Rayat Al-Furat Travel & Tourism.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "subtitle": { "type": "string", "maxLength": 240 },
+        "destination": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "tripType": { "type": "string", "enum": ["umrah", "family", "honeymoon", "tourism", "vip"] },
+        "categoryId": { "type": "string", "maxLength": 128 },
+        "durationDays": { "type": "number" },
+        "durationNights": { "type": "number" },
+        "durationLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "departureDate": { "type": "string", "minLength": 4, "maxLength": 60 },
+        "price": { "type": "number" },
+        "childPrice": { "type": "number" },
+        "infantPrice": { "type": "number" },
+        "currency": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "availableSeats": { "type": "number" },
+        "buses": { "type": "array" },
+        "coverImage": { "type": "string", "maxLength": 260000 },
+        "highlights": { "type": "array" },
+        "itinerary": { "type": "array" },
+        "inclusions": { "type": "array" },
+        "exclusions": { "type": "array" },
+        "hotelInfo": { "type": "string", "maxLength": 1500 },
+        "transportInfo": { "type": "string", "maxLength": 1500 },
+        "cancellationPolicy": { "type": "string", "maxLength": 2000 },
+        "formTemplateId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "featured": { "type": "boolean" },
+        "visible": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "title",
+        "destination",
+        "tripType",
+        "durationDays",
+        "durationNights",
+        "durationLabel",
+        "departureDate",
+        "price",
+        "childPrice",
+        "infantPrice",
+        "currency",
+        "availableSeats",
+        "coverImage",
+        "highlights",
+        "itinerary",
+        "inclusions",
+        "exclusions",
+        "hotelInfo",
+        "transportInfo",
+        "cancellationPolicy",
+        "formTemplateId",
+        "featured",
+        "visible",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FormTemplate": {
+      "title": "FormTemplate",
+      "description": "Dynamic booking form schema configured by administrators and linked to travel packages.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 400 },
+        "isDefault": { "type": "boolean" },
+        "fields": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "description", "isDefault", "fields", "createdAt", "updatedAt"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Customer travel booking record containing private traveler PII and dynamic form responses. Accessible only to verified staff.",
+      "type": "object",
+      "properties": {
+        "bookingRef": { "type": "string", "minLength": 5, "maxLength": 32, "pattern": "^[A-Z0-9\\-]+$" },
+        "trackerId": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "packageId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "packageTitle": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "departureDate": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "formTemplateId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "customerPhone": { "type": "string", "minLength": 7, "maxLength": 30 },
+        "customerEmail": { "type": "string", "maxLength": 120 },
+        "adultsCount": { "type": "number" },
+        "childrenCount": { "type": "number" },
+        "infantsCount": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "currency": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "busId": { "type": "string", "maxLength": 128 },
+        "busName": { "type": "string", "maxLength": 120 },
+        "paidAmount": { "type": "number" },
+        "remainingAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "partial", "paid"] },
+        "payments": { "type": "array" },
+        "travelers": { "type": "array" },
+        "customerNotes": { "type": "string", "maxLength": 1000 },
+        "internalNotes": { "type": "string", "maxLength": 2000 },
+        "publicStatusNote": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["pending_review", "awaiting_payment", "confirmed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "bookingRef",
+        "trackerId",
+        "packageId",
+        "packageTitle",
+        "departureDate",
+        "formTemplateId",
+        "customerName",
+        "customerPhone",
+        "customerEmail",
+        "adultsCount",
+        "childrenCount",
+        "infantsCount",
+        "totalPrice",
+        "currency",
+        "travelers",
+        "customerNotes",
+        "internalNotes",
+        "publicStatusNote",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BookingAttachment": {
+      "title": "BookingAttachment",
+      "description": "Uploaded passport or national ID file linked to a booking and traveler index.",
+      "type": "object",
+      "properties": {
+        "bookingId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "travelerIndex": { "type": "number" },
+        "fieldId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "fieldLabel": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "fileName": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "mimeType": { "type": "string", "minLength": 3, "maxLength": 80 },
+        "dataUrl": { "type": "string", "minLength": 10, "maxLength": 260000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bookingId", "travelerIndex", "fieldId", "fieldLabel", "fileName", "mimeType", "dataUrl", "createdAt"]
+    },
+    "BookingTracker": {
+      "title": "BookingTracker",
+      "description": "Publicly queryable (by exact Ref+Phone key only) non-PII status tracker synchronized with a Booking.",
+      "type": "object",
+      "properties": {
+        "bookingId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "bookingRef": { "type": "string", "minLength": 5, "maxLength": 32, "pattern": "^[A-Z0-9\\-]+$" },
+        "packageTitle": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "departureDate": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "travelersCount": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "currency": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "busName": { "type": "string", "maxLength": 120 },
+        "paidAmount": { "type": "number" },
+        "remainingAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "partial", "paid"] },
+        "status": { "type": "string", "enum": ["pending_review", "awaiting_payment", "confirmed", "cancelled"] },
+        "publicStatusNote": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "bookingId",
+        "bookingRef",
+        "packageTitle",
+        "departureDate",
+        "travelersCount",
+        "totalPrice",
+        "currency",
+        "status",
+        "publicStatusNote",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Agency branding, CMS text content, visual theme colors, contact numbers, and policies.",
+      "type": "object",
+      "properties": {
+        "agencyName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "agencySubtitle": { "type": "string", "maxLength": 120 },
+        "tagline": { "type": "string", "maxLength": 180 },
+        "licenseNumber": { "type": "string", "maxLength": 80 },
+        "logoUrl": { "type": "string", "maxLength": 260000 },
+        "primaryColor": { "type": "string", "minLength": 4, "maxLength": 20 },
+        "secondaryColor": { "type": "string", "minLength": 4, "maxLength": 20 },
+        "accentColor": { "type": "string", "minLength": 4, "maxLength": 20 },
+        "bgColor": { "type": "string", "minLength": 4, "maxLength": 20 },
+        "heroTitle": { "type": "string", "minLength": 2, "maxLength": 180 },
+        "heroSubtitle": { "type": "string", "maxLength": 400 },
+        "welcomePhrase": { "type": "string", "maxLength": 120 },
+        "contacts": { "type": "array" },
+        "email": { "type": "string", "maxLength": 120 },
+        "address": { "type": "string", "maxLength": 240 },
+        "whatsappNumber": { "type": "string", "maxLength": 30 },
+        "instagramUrl": { "type": "string", "maxLength": 240 },
+        "twitterUrl": { "type": "string", "maxLength": 240 },
+        "snapchatUrl": { "type": "string", "maxLength": 240 },
+        "termsAndConditions": { "type": "string", "maxLength": 5000 },
+        "defaultCancellationPolicy": { "type": "string", "maxLength": 3000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "agencyName",
+        "agencySubtitle",
+        "tagline",
+        "logoUrl",
+        "primaryColor",
+        "secondaryColor",
+        "accentColor",
+        "bgColor",
+        "heroTitle",
+        "heroSubtitle",
+        "welcomePhrase",
+        "contacts",
+        "email",
+        "address",
+        "whatsappNumber",
+        "instagramUrl",
+        "twitterUrl",
+        "snapchatUrl",
+        "termsAndConditions",
+        "defaultCancellationPolicy",
+        "updatedAt"
+      ]
+    },
+    "StaffMember": {
+      "title": "StaffMember",
+      "description": "Authorized agency staff account and granular RBAC permission profile keyed by lowercase email.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "minLength": 5, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "role": { "type": "string", "enum": ["super_admin", "manager", "sales", "content_editor"] },
+        "active": { "type": "boolean" },
+        "permissions": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "name", "role", "active", "permissions", "createdAt", "updatedAt"]
+    },
+    "SeasonPoster": {
+      "title": "SeasonPoster",
+      "description": "Promotional campaign poster or season offer banner managed by agency admins.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "subtitle": { "type": "string", "maxLength": 260 },
+        "imageUrl": { "type": "string", "minLength": 1, "maxLength": 350000 },
+        "active": { "type": "boolean" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "subtitle", "imageUrl", "active", "order", "createdAt", "updatedAt"]
+    },
+    "PackageCategory": {
+      "title": "PackageCategory",
+      "description": "Admin-defined travel package category shown dynamically on the storefront when it has active packages.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 300 },
+        "order": { "type": "number" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "description", "order", "active", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/PackageCategory" },
+      "description": "Dynamic admin-managed package categories"
+    },
+    "/packages/{packageId}": {
+      "schema": { "$ref": "#/entities/TravelPackage" },
+      "description": "Travel & Umrah packages catalog"
+    },
+    "/formTemplates/{formId}": {
+      "schema": { "$ref": "#/entities/FormTemplate" },
+      "description": "Dynamic booking form templates"
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Private customer bookings with traveler details and payment records (Staff-only read/update)"
+    },
+    "/bookings/{bookingId}/attachments/{attachmentId}": {
+      "schema": { "$ref": "#/entities/BookingAttachment" },
+      "description": "Uploaded traveler passport/ID files (Staff-only read)"
+    },
+    "/bookingTrackers/{trackerId}": {
+      "schema": { "$ref": "#/entities/BookingTracker" },
+      "description": "Non-PII booking status tracker keyed by REF_PHONE for single-doc get only"
+    },
+    "/siteSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/SiteSettings" },
+      "description": "Agency CMS branding, colors, contacts, and terms"
+    },
+    "/staff/{staffEmail}": {
+      "schema": { "$ref": "#/entities/StaffMember" },
+      "description": "Admin and employee RBAC permission profiles"
+    },
+    "/seasonPosters/{posterId}": {
+      "schema": { "$ref": "#/entities/SeasonPoster" },
+      "description": "Promotional campaign posters and season ads manageable by admins"
+    }
+  }
+}

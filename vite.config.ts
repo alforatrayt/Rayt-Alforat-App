@@ -15,7 +15,6 @@ export default defineConfig(() => {
         includeAssets: [
           'favicon.ico',
           'apple-touch-icon.png',
-          'icon.svg',
           'pwa-192x192.png',
           'pwa-512x512.png',
           'pwa-maskable-512x512.png',
@@ -55,9 +54,23 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
+          clientsClaim: true,
+          globPatterns: ['**/*.{js,css,html,woff,woff2}'],
+          globIgnores: [
+            '**/manifest.webmanifest',
+            '**/pwa-*.png',
+            '**/apple-touch-icon.png',
+            '**/favicon.ico',
+            '**/icon.svg',
+          ],
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
           runtimeCaching: [
+            {
+              urlPattern: /\/(manifest\.webmanifest|manifest\.json|pwa-.*\.png|apple-touch-icon\.png|favicon\.ico|icon\.svg)(\?.*)?$/i,
+              handler: 'NetworkOnly',
+            },
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',

@@ -12,20 +12,26 @@ import {
 } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import type { SiteSettings } from '../types';
+import { buildCacheBustedLogoSrc } from '../utils/pwaDynamicMeta';
 
 interface PWAInstallButtonProps {
+  settings?: SiteSettings;
   compact?: boolean;
   fullWidth?: boolean;
   onActionDone?: () => void;
 }
 
 export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
+  settings,
   compact = false,
   fullWidth = false,
   onActionDone,
 }) => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [guideOpen, setGuideOpen] = useState(false);
+  const logoSrc = buildCacheBustedLogoSrc(settings?.logoUrl, settings?.logoVersion);
+  const agencyLabel = settings?.agencyName || 'راية الفرات';
 
   // Auto-hide completely when running as an installed standalone PWA
   if (isInstalled) {
@@ -75,13 +81,13 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
               <div className="px-6 py-4 bg-[#0F332B] text-white flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <img
-                    src="/pwa-192x192.png"
-                    alt="شعار راية الفرات"
-                    className="w-10 h-10 object-contain shrink-0"
+                    src={logoSrc}
+                    alt={`شعار ${agencyLabel}`}
+                    className="w-10 h-10 rounded-xl object-contain bg-white/95 p-0.5 shrink-0"
                   />
                   <div>
                     <h3 className="font-display font-extrabold text-base leading-snug">
-                      تثبيت تطبيق راية الفرات
+                      تثبيت تطبيق {agencyLabel}
                     </h3>
                     <p className="text-[11px] text-[#E8C97E]">
                       وصول سريع بملء الشاشة على جوالك وجهازك

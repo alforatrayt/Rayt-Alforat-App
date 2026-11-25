@@ -94,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 3: PWA Install + Share + Primary Admin Action + Mobile Menu Trigger */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-          <PWAInstallButton compact />
+          <PWAInstallButton settings={settings} compact />
 
           <button
             type="button"
@@ -160,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <div className="pt-2 border-t border-[#E6DCCA] space-y-2">
-            <PWAInstallButton fullWidth onActionDone={() => setMobileMenuOpen(false)} />
+            <PWAInstallButton settings={settings} fullWidth onActionDone={() => setMobileMenuOpen(false)} />
             <button
               type="button"
               onClick={async () => {

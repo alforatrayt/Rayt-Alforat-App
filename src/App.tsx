@@ -35,6 +35,11 @@ import { DynamicBookingView } from './components/DynamicBookingView';
 import { TrackBookingView } from './components/TrackBookingView';
 import { AdminDashboard, type AdminTab } from './components/admin/AdminDashboard';
 import { OfflineIndicator } from './components/PWAInstallButton';
+import {
+  readCachedSiteSettings,
+  syncDynamicPwaHeadAndManifest,
+  writeCachedSiteSettings,
+} from './utils/pwaDynamicMeta';
 
 function AppShell() {
   const [route, setRoute] = useState<PublicRoute>('home');
@@ -43,7 +48,9 @@ function AppShell() {
   const [authReady, setAuthReady] = useState(false);
   const [blockedAuthEmail, setBlockedAuthEmail] = useState<string>('');
 
-  const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
+  const [settings, setSettings] = useState<SiteSettings>(
+    () => readCachedSiteSettings() || DEFAULT_SITE_SETTINGS
+  );
   const [categories, setCategories] = useState<PackageCategory[]>([]);
   const [packages, setPackages] = useState<TravelPackage[]>([]);
   const [seasonPosters, setSeasonPosters] = useState<SeasonPoster[]>(DEFAULT_SEASON_POSTERS);
@@ -57,13 +64,15 @@ function AppShell() {
   const [trackPrefillRef, setTrackPrefillRef] = useState('');
   const [trackPrefillPhone, setTrackPrefillPhone] = useState('');
 
-  // Apply CMS dynamic brand colors to CSS custom properties immediately
+  // Apply CMS dynamic brand colors + dynamic PWA manifest, favicon & Apple Touch Icon
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--brand-primary', settings.primaryColor || '#0F332B');
     root.style.setProperty('--brand-secondary', settings.secondaryColor || '#0E6E73');
     root.style.setProperty('--brand-accent', settings.accentColor || '#B88E3E');
     root.style.setProperty('--brand-bg', settings.bgColor || '#F8F4EC');
+
+    void syncDynamicPwaHeadAndManifest(settings);
   }, [settings]);
 
   // Global Auth Firewall Listener:
@@ -109,6 +118,7 @@ function AppShell() {
 
       if (remoteSettings) {
         setSettings(remoteSettings);
+        writeCachedSiteSettings(remoteSettings);
       }
       setCategories(remoteCategories || []);
       setPackages(remotePackages || []);
@@ -214,7 +224,10 @@ function AppShell() {
         onClearBlockedAuth={() => setBlockedAuthEmail('')}
         settings={settings}
         initialTab={adminInitialTab}
-        onSettingsUpdated={(updated) => setSettings(updated)}
+        onSettingsUpdated={(updated) => {
+          setSettings(updated);
+          writeCachedSiteSettings(updated);
+        }}
         onPublicDataChanged={loadPublicCatalog}
         onBackToSite={() => handleNavigate('home')}
       />

@@ -36,9 +36,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     if (!file) return;
     setUploadingLogo(true);
     try {
-      const res = await compressFileToDataUrl(file, 420, 120000);
-      setDraft((prev) => ({ ...prev, logoUrl: res.dataUrl }));
-      showToast('تم رفع الشعار الجديد — اضغط "حفظ الإعدادات" لتطبيقه.', 'info');
+      const res = await compressFileToDataUrl(file, 512, 160000, true);
+      setDraft((prev) => ({
+        ...prev,
+        logoUrl: res.dataUrl,
+        logoVersion: Date.now(),
+      }));
+      showToast('تم رفع الشعار الجديد — اضغط "حفظ جميع الإعدادات" لتطبيقه وتحديث أيقونة التطبيق.', 'info');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'تعذر معالجة صورة الشعار', 'error');
     } finally {
@@ -61,9 +65,14 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     e.preventDefault();
     setSaving(true);
     try {
-      await saveSiteSettings(draft);
-      onSaved(draft);
-      showToast('تم حفظ إعدادات الهوية والنظام وتحديث الموقع بالكامل', 'success');
+      const nextDraft: SiteSettings = {
+        ...draft,
+        logoVersion: Date.now(),
+      };
+      await saveSiteSettings(nextDraft);
+      setDraft(nextDraft);
+      onSaved(nextDraft);
+      showToast('تم حفظ إعدادات الهوية وتحديث شعار التطبيق وأيقوناته بنجاح', 'success');
     } catch (err) {
       console.error(err);
       showToast('تعذر حفظ الإعدادات.', 'error');
@@ -139,7 +148,13 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
               {draft.logoUrl && (
                 <button
                   type="button"
-                  onClick={() => setDraft({ ...draft, logoUrl: '' })}
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      logoUrl: '',
+                      logoVersion: Date.now(),
+                    })
+                  }
                   className="px-3 py-2 rounded-xl text-xs font-medium text-red-700 hover:bg-red-50"
                 >
                   استخدام الشعار الرسمي

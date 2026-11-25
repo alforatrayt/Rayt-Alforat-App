@@ -194,6 +194,7 @@
         "tagline": { "type": "string", "maxLength": 180 },
         "licenseNumber": { "type": "string", "maxLength": 80 },
         "logoUrl": { "type": "string", "maxLength": 260000 },
+        "logoVersion": { "type": "number" },
         "primaryColor": { "type": "string", "minLength": 4, "maxLength": 20 },
         "secondaryColor": { "type": "string", "minLength": 4, "maxLength": 20 },
         "accentColor": { "type": "string", "minLength": 4, "maxLength": 20 },

@@ -177,6 +177,7 @@ export interface SiteSettings {
   tagline: string;
   licenseNumber?: string;
   logoUrl: string;
+  logoVersion?: number;
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;

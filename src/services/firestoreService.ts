@@ -68,6 +68,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       tagline: settings.tagline.trim().slice(0, 180),
       licenseNumber: (settings.licenseNumber || '').trim().slice(0, 80),
       logoUrl: (settings.logoUrl || '').slice(0, 260000),
+      logoVersion: Math.max(0, Math.floor(Number(settings.logoVersion) || Date.now())),
       primaryColor: settings.primaryColor.slice(0, 20),
       secondaryColor: settings.secondaryColor.slice(0, 20),
       accentColor: settings.accentColor.slice(0, 20),

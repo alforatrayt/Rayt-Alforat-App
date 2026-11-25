@@ -26,7 +26,8 @@ export function generateSafeId(prefix: string): string {
 export async function compressFileToDataUrl(
   file: File,
   maxWidth = 960,
-  maxBytes = 190000
+  maxBytes = 190000,
+  preserveTransparency = false
 ): Promise<{ dataUrl: string; mimeType: string; fileName: string }> {
   if (file.type === 'application/pdf') {
     const dataUrl = await readAsDataUrl(file);
@@ -44,23 +45,75 @@ export async function compressFileToDataUrl(
   const img = await loadImage(rawDataUrl);
 
   const canvas = document.createElement('canvas');
-  let targetWidth = img.width;
-  let targetHeight = img.height;
+  let targetWidth = img.width || maxWidth;
+  let targetHeight = img.height || maxWidth;
 
   if (targetWidth > maxWidth) {
     targetHeight = Math.round((targetHeight * maxWidth) / targetWidth);
     targetWidth = maxWidth;
   }
+  if (targetHeight > maxWidth && preserveTransparency) {
+    targetWidth = Math.round((targetWidth * maxWidth) / targetHeight);
+    targetHeight = maxWidth;
+  }
 
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
+  canvas.width = Math.max(1, targetWidth);
+  canvas.height = Math.max(1, targetHeight);
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     throw new Error('تعذر معالجة الصورة في المتصفح.');
   }
+
+  const supportsAlpha =
+    preserveTransparency &&
+    (file.type === 'image/png' || file.type === 'image/webp' || file.type === 'image/svg+xml');
+
+  if (supportsAlpha) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    let pngOutput = canvas.toDataURL('image/png');
+    if (pngOutput.length <= maxBytes) {
+      return {
+        dataUrl: pngOutput,
+        mimeType: 'image/png',
+        fileName: file.name,
+      };
+    }
+
+    // Try slightly smaller PNG before falling back to WebP/JPEG to keep alpha edges crisp
+    for (const scale of [0.76, 0.56]) {
+      const scaled = document.createElement('canvas');
+      scaled.width = Math.max(64, Math.round(canvas.width * scale));
+      scaled.height = Math.max(64, Math.round(canvas.height * scale));
+      const sCtx = scaled.getContext('2d');
+      if (sCtx) {
+        sCtx.clearRect(0, 0, scaled.width, scaled.height);
+        sCtx.drawImage(img, 0, 0, scaled.width, scaled.height);
+        pngOutput = scaled.toDataURL('image/png');
+        if (pngOutput.length <= maxBytes) {
+          return {
+            dataUrl: pngOutput,
+            mimeType: 'image/png',
+            fileName: file.name,
+          };
+        }
+      }
+    }
+
+    const webpOutput = canvas.toDataURL('image/webp', 0.86);
+    if (webpOutput.startsWith('data:image/webp') && webpOutput.length <= maxBytes) {
+      return {
+        dataUrl: webpOutput,
+        mimeType: 'image/webp',
+        fileName: file.name,
+      };
+    }
+  }
+
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, targetWidth, targetHeight);
-  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
   let quality = 0.78;
   let output = canvas.toDataURL('image/jpeg', quality);
@@ -71,8 +124,8 @@ export async function compressFileToDataUrl(
 
   if (output.length > 245000) {
     const smallerCanvas = document.createElement('canvas');
-    smallerCanvas.width = Math.round(targetWidth * 0.65);
-    smallerCanvas.height = Math.round(targetHeight * 0.65);
+    smallerCanvas.width = Math.round(canvas.width * 0.65);
+    smallerCanvas.height = Math.round(canvas.height * 0.65);
     const sCtx = smallerCanvas.getContext('2d');
     if (sCtx) {
       sCtx.fillStyle = '#FFFFFF';

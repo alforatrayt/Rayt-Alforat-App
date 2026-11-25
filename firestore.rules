@@ -274,7 +274,7 @@ service cloud.firestore {
           'defaultCancellationPolicy', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'agencyName', 'agencySubtitle', 'tagline', 'licenseNumber', 'logoUrl',
+          'agencyName', 'agencySubtitle', 'tagline', 'licenseNumber', 'logoUrl', 'logoVersion',
           'primaryColor', 'secondaryColor', 'accentColor', 'bgColor',
           'heroTitle', 'heroSubtitle', 'welcomePhrase', 'contacts',
           'email', 'address', 'whatsappNumber', 'instagramUrl',
@@ -286,6 +286,7 @@ service cloud.firestore {
         && isValidString(data.tagline, 0, 180)
         && (!('licenseNumber' in data) || isValidString(data.licenseNumber, 0, 80))
         && isValidString(data.logoUrl, 0, 260000)
+        && (!('logoVersion' in data) || (data.logoVersion is number && data.logoVersion >= 0))
         && isValidString(data.primaryColor, 4, 20)
         && isValidString(data.secondaryColor, 4, 20)
         && isValidString(data.accentColor, 4, 20)
@@ -538,7 +539,7 @@ service cloud.firestore {
         && incoming().updatedAt == request.time
         && hasPermission('manageSettings')
         && incoming().diff(existing()).affectedKeys().hasOnly([
-          'agencyName', 'agencySubtitle', 'tagline', 'licenseNumber', 'logoUrl',
+          'agencyName', 'agencySubtitle', 'tagline', 'licenseNumber', 'logoUrl', 'logoVersion',
           'primaryColor', 'secondaryColor', 'accentColor', 'bgColor',
           'heroTitle', 'heroSubtitle', 'welcomePhrase', 'contacts',
           'email', 'address', 'whatsappNumber', 'instagramUrl',
